@@ -14,4 +14,4 @@ az acr login --name autonexo
 
 docker tag autonexo-api:latest autonexo.azurecr.io/autonexo-api:latest
 
-docker push autonexo.azurecr.io/autonex-api:latest
+docker push autonexo.azurecr.io/autonexo-api:latest

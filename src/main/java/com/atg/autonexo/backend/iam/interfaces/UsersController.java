@@ -107,8 +107,8 @@ public class UsersController {
                     
         } catch (UserAlreadyExistsException e) {
             LOGGER.warn("Signup failed for email {}: {}", signUpResource.email(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Este email ya está registrado. ¿Olvidaste tu contraseña?");
         } catch (IllegalArgumentException e) {
             LOGGER.warn("Signup failed for email {}: {}", signUpResource.email(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -153,11 +153,11 @@ public class UsersController {
         } catch (InvalidCredentialsException e) {
             LOGGER.warn("Signin failed for email {}: {}", signInResource.email(), e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(e.getMessage());
+                    .body("Email o contraseña incorrectos");
         } catch (UserAccountDeactivatedException e) {
             LOGGER.warn("Signin failed for email {}: {}", signInResource.email(), e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(e.getMessage());
+                    .body("Tu cuenta ha sido desactivada. Contacta a soporte para más información.");
         } catch (IllegalArgumentException e) {
             LOGGER.warn("Signin failed for email {}: {}", signInResource.email(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

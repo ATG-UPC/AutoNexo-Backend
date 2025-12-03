@@ -25,7 +25,7 @@ import lombok.Setter;
 @jakarta.persistence.Table(name = "offers")
 public class Offer extends AuditableModel {
     
-    @Column(name = "service_request_id", nullable = false, insertable = false, updatable = false)
+    @Column(name = "service_request_id", nullable = false)
     private Long serviceRequestId;
     
     @Embedded

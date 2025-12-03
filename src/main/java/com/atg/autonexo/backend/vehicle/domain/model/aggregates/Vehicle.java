@@ -30,6 +30,9 @@ public class Vehicle extends AuditableAbstractAggregateRoot<Vehicle> {
     private Long brandId;
     
     @Column(nullable = false, length = 100)
+    private String brand;
+    
+    @Column(nullable = false, length = 100)
     private String model;
     
     @Column(nullable = false)
@@ -64,10 +67,13 @@ public class Vehicle extends AuditableAbstractAggregateRoot<Vehicle> {
     /**
      * Creates a new vehicle with the primary owner.
      */
-    public Vehicle(Long brandId, String model, Integer year, LicensePlate licensePlate, 
+    public Vehicle(Long brandId, String brand, String model, Integer year, LicensePlate licensePlate, 
                    VIN vin, String color, Mileage initialMileage, UserId primaryOwnerId) {
         if (brandId == null) {
             throw new IllegalArgumentException("Brand ID cannot be null");
+        }
+        if (brand == null || brand.trim().isEmpty()) {
+            throw new IllegalArgumentException("Brand cannot be null or empty");
         }
         if (model == null || model.trim().isEmpty()) {
             throw new IllegalArgumentException("Model cannot be null or empty");
@@ -86,6 +92,7 @@ public class Vehicle extends AuditableAbstractAggregateRoot<Vehicle> {
         }
         
         this.brandId = brandId;
+        this.brand = brand;
         this.model = model;
         this.year = year;
         this.licensePlate = licensePlate;

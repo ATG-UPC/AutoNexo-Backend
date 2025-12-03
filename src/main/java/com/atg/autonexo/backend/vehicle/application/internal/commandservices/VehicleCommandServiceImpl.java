@@ -70,6 +70,7 @@ public class VehicleCommandServiceImpl implements VehicleCommandService {
         UserId primaryOwnerId = new UserId(userId);
         Vehicle vehicle = new Vehicle(
             command.brandId(),
+            brand.getName(),
             command.model(),
             command.year(),
             command.licensePlate(),

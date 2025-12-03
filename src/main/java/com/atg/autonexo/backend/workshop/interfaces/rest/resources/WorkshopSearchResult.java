@@ -17,3 +17,6 @@ public record WorkshopSearchResult(
     String primaryLocation // First location address for display
 ) {}
 
+
+
+

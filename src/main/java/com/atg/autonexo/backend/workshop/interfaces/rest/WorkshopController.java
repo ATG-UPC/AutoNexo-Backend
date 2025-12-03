@@ -54,6 +54,7 @@ import com.atg.autonexo.backend.workshop.interfaces.rest.resources.AddStaffMembe
 import com.atg.autonexo.backend.workshop.interfaces.rest.resources.CreateWorkshopResource;
 import com.atg.autonexo.backend.workshop.interfaces.rest.resources.LocationResource;
 import com.atg.autonexo.backend.workshop.interfaces.rest.resources.ServiceTemplateResource;
+import com.atg.autonexo.backend.workshop.interfaces.rest.resources.StaffMemberResource;
 import com.atg.autonexo.backend.workshop.interfaces.rest.resources.SubscriptionResource;
 import com.atg.autonexo.backend.workshop.interfaces.rest.resources.UpdateWorkshopResource;
 import com.atg.autonexo.backend.workshop.interfaces.rest.resources.UpdateSubscriptionResource;
@@ -63,6 +64,7 @@ import com.atg.autonexo.backend.workshop.interfaces.rest.transform.AddServiceTem
 import com.atg.autonexo.backend.workshop.interfaces.rest.transform.CreateWorkshopCommandFromResourceAssembler;
 import com.atg.autonexo.backend.workshop.interfaces.rest.transform.LocationResourceFromEntityAssembler;
 import com.atg.autonexo.backend.workshop.interfaces.rest.transform.ServiceTemplateResourceFromEntityAssembler;
+import com.atg.autonexo.backend.workshop.interfaces.rest.transform.StaffMemberResourceFromEntityAssembler;
 import com.atg.autonexo.backend.workshop.interfaces.rest.transform.UpdateWorkshopCommandFromResourceAssembler;
 import com.atg.autonexo.backend.workshop.interfaces.rest.transform.WorkshopResourceFromEntityAssembler;
 
@@ -371,6 +373,39 @@ public class WorkshopController {
             LOGGER.error("Unexpected error getting locations: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("An unexpected error occurred while getting locations");
+        }
+    }
+    
+    /**
+     * Get all staff members for my workshop
+     * @return ResponseEntity with list of staff members
+     */
+    @GetMapping("/my-workshop/staff")
+    public ResponseEntity<?> getMyWorkshopStaff() {
+        try {
+            Long workshopId = getWorkshopIdFromContext();
+            LOGGER.info("Getting staff members for workshop ID: {}", workshopId);
+            
+            Workshop workshop = workshopQueryService.handle(new GetWorkshopByIdQuery(workshopId))
+                    .orElseThrow(() -> new WorkshopNotFoundException(workshopId));
+            
+            List<StaffMemberResource> staffMembers = workshop.getStaffMembers().stream()
+                    .map(StaffMemberResourceFromEntityAssembler::toResourceFromEntity)
+                    .collect(Collectors.toList());
+            
+            LOGGER.info("Found {} staff members for workshop {}", staffMembers.size(), workshopId);
+            return ResponseEntity.ok(staffMembers);
+            
+        } catch (WorkshopContextNotFoundException e) {
+            LOGGER.warn("Workshop context not found: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (WorkshopNotFoundException e) {
+            LOGGER.warn("Workshop not found: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            LOGGER.error("Unexpected error getting staff members: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("An unexpected error occurred while getting staff members");
         }
     }
     

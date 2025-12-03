@@ -22,3 +22,6 @@ public record PublicWorkshopProfile(
     Double distance // Distance in km (if location-based search)
 ) {}
 
+
+
+

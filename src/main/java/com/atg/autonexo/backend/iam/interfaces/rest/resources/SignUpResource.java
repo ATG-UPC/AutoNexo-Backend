@@ -37,7 +37,7 @@ public record SignUpResource(
     String lastName,
     
     @NotBlank(message = "Phone number is required")
-    @Size(min = 10, max = 15, message = "Phone number must be between 10 and 15 characters")
+    @Size(min = 9, max = 15, message = "Phone number must be between 9 and 15 characters")
     String phoneNumber,
     
     @NotNull(message = "Requested role is required")
