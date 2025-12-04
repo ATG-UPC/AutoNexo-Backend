@@ -82,6 +82,10 @@ public class ServiceRequest extends AuditableAbstractAggregateRoot<ServiceReques
     
     /**
      * Creates a new service request.
+     * 
+     * Supports two modes:
+     * 1. Standard request: requestedServices is not empty
+     * 2. Custom request: requestedServices can be empty, but description is mandatory
      */
     public ServiceRequest(UserId userId, Long vehicleId, List<ServiceCatalog> requestedServices,
                          String description, Coordinates userLocation, SearchRadius searchRadius) {
@@ -91,9 +95,6 @@ public class ServiceRequest extends AuditableAbstractAggregateRoot<ServiceReques
         if (vehicleId == null || vehicleId <= 0) {
             throw new IllegalArgumentException("VehicleId must be valid");
         }
-        if (requestedServices == null || requestedServices.isEmpty()) {
-            throw new IllegalArgumentException("RequestedServices cannot be null or empty");
-        }
         if (userLocation == null) {
             throw new IllegalArgumentException("UserLocation cannot be null");
         }
@@ -101,9 +102,16 @@ public class ServiceRequest extends AuditableAbstractAggregateRoot<ServiceReques
             throw new IllegalArgumentException("SearchRadius cannot be null");
         }
         
+        // Validate: either services or description must be provided
+        boolean hasServices = requestedServices != null && !requestedServices.isEmpty();
+        boolean hasDescription = description != null && !description.trim().isEmpty();
+        if (!hasServices && !hasDescription) {
+            throw new IllegalArgumentException("Either requestedServices or description must be provided");
+        }
+        
         this.userId = userId;
         this.vehicleId = vehicleId;
-        this.requestedServices = new ArrayList<>(requestedServices);
+        this.requestedServices = requestedServices != null ? new ArrayList<>(requestedServices) : new ArrayList<>();
         this.description = description;
         this.userLocation = userLocation;
         this.searchRadius = searchRadius;
@@ -111,6 +119,13 @@ public class ServiceRequest extends AuditableAbstractAggregateRoot<ServiceReques
         this.offers = new ArrayList<>();
         this.matches = new ArrayList<>();
         this.rejectedByWorkshops = new HashSet<>();
+    }
+    
+    /**
+     * Checks if this is a custom request (no predefined services).
+     */
+    public boolean isCustomRequest() {
+        return requestedServices == null || requestedServices.isEmpty();
     }
     
     /**

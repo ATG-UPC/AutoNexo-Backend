@@ -52,6 +52,12 @@ public class ServiceRequestController {
     @PostMapping
     public ResponseEntity<?> createServiceRequest(@Valid @RequestBody CreateServiceRequestResource resource) {
         try {
+            // Validate custom request logic
+            if (!resource.isValid()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Either requestedServices or description must be provided");
+            }
+            
             Long userId = getCurrentUserId();
             var command = ServiceRequestCommandFromResourceAssembler.toCommandFromResource(resource, userId);
             var serviceRequest = commandService.handle(command);

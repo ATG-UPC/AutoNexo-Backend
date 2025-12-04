@@ -28,10 +28,16 @@ public class ServiceRequestCommandFromResourceAssembler {
     public static CreateServiceRequestCommand toCommandFromResource(CreateServiceRequestResource resource, Long userId) {
         List<ServiceCatalog> requestedServices = new ArrayList<>();
         LOGGER.info("Requested services: {}", resource);
-        resource.requestedServices().forEach(service -> {
-            LOGGER.info("Service: {}", service);
-            requestedServices.add(ServiceCatalog.fromString(service));
-        });
+        
+        // Handle null or empty requestedServices (custom request)
+        if (resource.requestedServices() != null && !resource.requestedServices().isEmpty()) {
+            resource.requestedServices().forEach(service -> {
+                LOGGER.info("Service: {}", service);
+                requestedServices.add(ServiceCatalog.fromString(service));
+            });
+        } else {
+            LOGGER.info("Custom request - no predefined services");
+        }
         
         return new CreateServiceRequestCommand(
             new UserId(userId),

@@ -1,5 +1,6 @@
 package com.atg.autonexo.backend.vehicle.interfaces.rest;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -32,7 +33,10 @@ import com.atg.autonexo.backend.vehicle.domain.model.commands.AddAuthorizedUserC
 import com.atg.autonexo.backend.vehicle.domain.model.commands.TransferOwnershipCommand;
 import com.atg.autonexo.backend.vehicle.domain.model.queries.GetUserVehiclesQuery;
 import com.atg.autonexo.backend.vehicle.domain.model.queries.GetVehicleByIdQuery;
+import com.atg.autonexo.backend.vehicle.domain.model.valueobjects.OwnershipType;
+import com.atg.autonexo.backend.vehicle.infrastructure.persistence.jpa.repositories.VehicleOwnershipRepository;
 import com.atg.autonexo.backend.vehicle.interfaces.rest.resources.AddAuthorizedUserResource;
+import com.atg.autonexo.backend.vehicle.interfaces.rest.resources.AuthorizedUserResource;
 import com.atg.autonexo.backend.vehicle.interfaces.rest.resources.CreateVehicleResource;
 import com.atg.autonexo.backend.vehicle.interfaces.rest.resources.TransferOwnershipResource;
 import com.atg.autonexo.backend.vehicle.interfaces.rest.resources.UpdateMileageResource;
@@ -55,18 +59,21 @@ public class VehicleController {
     private final CloudinaryService cloudinaryService;
     private final UserRepository userRepository;
     private final com.atg.autonexo.backend.vehicle.infrastructure.persistence.jpa.repositories.VehicleRepository vehicleRepository;
+    private final VehicleOwnershipRepository ownershipRepository;
     
     public VehicleController(
             VehicleCommandServiceImpl vehicleCommandService,
             VehicleQueryServiceImpl vehicleQueryService,
             CloudinaryService cloudinaryService,
             UserRepository userRepository,
-            com.atg.autonexo.backend.vehicle.infrastructure.persistence.jpa.repositories.VehicleRepository vehicleRepository) {
+            com.atg.autonexo.backend.vehicle.infrastructure.persistence.jpa.repositories.VehicleRepository vehicleRepository,
+            VehicleOwnershipRepository ownershipRepository) {
         this.vehicleCommandService = vehicleCommandService;
         this.vehicleQueryService = vehicleQueryService;
         this.cloudinaryService = cloudinaryService;
         this.userRepository = userRepository;
         this.vehicleRepository = vehicleRepository;
+        this.ownershipRepository = ownershipRepository;
     }
     
     @PostMapping
@@ -164,13 +171,55 @@ public class VehicleController {
         }
     }
     
+    @GetMapping("/{id}/authorized-users")
+    public ResponseEntity<?> getAuthorizedUsers(@PathVariable Long id) {
+        try {
+            Long currentUserId = getCurrentUserId();
+            
+            // Verify user has access to this vehicle
+            if (!ownershipRepository.isUserAuthorized(id, currentUserId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("You don't have access to this vehicle");
+            }
+            
+            // Get all ownerships for this vehicle
+            var ownerships = ownershipRepository.findByVehicleId(id);
+            
+            // Map to AuthorizedUserResource with user details
+            List<AuthorizedUserResource> authorizedUsers = ownerships.stream()
+                .map(ownership -> {
+                    var user = userRepository.findById(ownership.getUserId().id())
+                        .orElse(null);
+                    if (user == null) return null;
+                    
+                    return new AuthorizedUserResource(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getFirstName(),
+                        user.getLastName(),
+                        ownership.getOwnershipType().name(),
+                        ownership.getAddedAt()
+                    );
+                })
+                .filter(resource -> resource != null)
+                .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(authorizedUsers);
+        } catch (Exception e) {
+            LOGGER.error("Error getting authorized users", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("An error occurred while getting authorized users");
+        }
+    }
+    
     @PostMapping("/{id}/authorized-users")
     public ResponseEntity<?> addAuthorizedUser(@PathVariable Long id, @Valid @RequestBody AddAuthorizedUserResource resource) {
         try {
+            Long currentUserId = getCurrentUserId();
             User user = userRepository.findByEmail(resource.email())
                 .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + resource.email()));
             
-            var command = new AddAuthorizedUserCommand(id, new UserId(user.getId()));
+            var command = new AddAuthorizedUserCommand(id, new UserId(user.getId()), currentUserId);
             vehicleCommandService.handle(command);
             return ResponseEntity.status(HttpStatus.CREATED).body("Authorized user added successfully");
         } catch (OnlyPrimaryOwnerException e) {
@@ -187,11 +236,14 @@ public class VehicleController {
     @DeleteMapping("/{id}/authorized-users/{userId}")
     public ResponseEntity<?> removeAuthorizedUser(@PathVariable Long id, @PathVariable Long userId) {
         try {
-            var command = new com.atg.autonexo.backend.vehicle.domain.model.commands.RemoveAuthorizedUserCommand(id, userId);
+            Long currentUserId = getCurrentUserId();
+            var command = new com.atg.autonexo.backend.vehicle.domain.model.commands.RemoveAuthorizedUserCommand(id, userId, currentUserId);
             vehicleCommandService.handle(command);
             return ResponseEntity.ok("Authorized user removed successfully");
         } catch (OnlyPrimaryOwnerException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
             LOGGER.error("Error removing authorized user", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

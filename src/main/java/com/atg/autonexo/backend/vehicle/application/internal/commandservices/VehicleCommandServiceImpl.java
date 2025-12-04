@@ -114,11 +114,21 @@ public class VehicleCommandServiceImpl implements VehicleCommandService {
     
     @Override
     public void handle(AddAuthorizedUserCommand command) {
-        LOGGER.info("Adding authorized user {} to vehicle {}", command.authorizedUserId().id(), command.vehicleId());
+        LOGGER.info("Adding authorized user {} to vehicle {} by requester {}", 
+            command.authorizedUserId().id(), command.vehicleId(), command.requesterId());
         
         // Verify vehicle exists
         vehicleRepository.findById(command.vehicleId())
             .orElseThrow(() -> new VehicleNotFoundException(command.vehicleId()));
+        
+        // Verify requester is the primary owner
+        VehicleOwnership primaryOwnership = ownershipRepository
+            .findPrimaryOwnership(command.vehicleId(), OwnershipType.PRIMARY)
+            .orElseThrow(() -> new VehicleNotFoundException(command.vehicleId()));
+        
+        if (!primaryOwnership.isForUser(command.requesterId())) {
+            throw new OnlyPrimaryOwnerException("add authorized users");
+        }
         
         // Check if user is already authorized
         if (ownershipRepository.findByVehicleIdAndUserIdId(command.vehicleId(), command.authorizedUserId().id()).isPresent()) {
@@ -138,11 +148,21 @@ public class VehicleCommandServiceImpl implements VehicleCommandService {
     
     @Override
     public void handle(RemoveAuthorizedUserCommand command) {
-        LOGGER.info("Removing authorized user {} from vehicle {}", command.userIdToRemove(), command.vehicleId());
+        LOGGER.info("Removing authorized user {} from vehicle {} by requester {}", 
+            command.userIdToRemove(), command.vehicleId(), command.requesterId());
         
         // Verify vehicle exists
         vehicleRepository.findById(command.vehicleId())
             .orElseThrow(() -> new VehicleNotFoundException(command.vehicleId()));
+        
+        // Verify requester is the primary owner
+        VehicleOwnership primaryOwnership = ownershipRepository
+            .findPrimaryOwnership(command.vehicleId(), OwnershipType.PRIMARY)
+            .orElseThrow(() -> new VehicleNotFoundException(command.vehicleId()));
+        
+        if (!primaryOwnership.isForUser(command.requesterId())) {
+            throw new OnlyPrimaryOwnerException("remove authorized users");
+        }
         
         VehicleOwnership ownership = ownershipRepository
             .findByVehicleIdAndUserIdId(command.vehicleId(), command.userIdToRemove())

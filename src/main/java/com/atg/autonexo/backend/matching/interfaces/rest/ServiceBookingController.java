@@ -22,7 +22,9 @@ import com.atg.autonexo.backend.matching.application.internal.commandservices.Se
 import com.atg.autonexo.backend.matching.application.internal.queryservices.ServiceBookingQueryServiceImpl;
 import com.atg.autonexo.backend.matching.domain.exceptions.ServiceBookingNotFoundException;
 import com.atg.autonexo.backend.matching.domain.model.queries.GetServiceBookingByIdQuery;
+import com.atg.autonexo.backend.matching.domain.model.queries.GetUserScheduleQuery;
 import com.atg.autonexo.backend.matching.domain.model.queries.GetUserServiceBookingsQuery;
+import com.atg.autonexo.backend.matching.domain.model.queries.GetUserUpcomingBookingQuery;
 import com.atg.autonexo.backend.matching.domain.model.queries.GetWorkshopServiceBookingsQuery;
 import com.atg.autonexo.backend.matching.domain.model.valueobjects.ServiceBookingStatus;
 import com.atg.autonexo.backend.matching.interfaces.rest.resources.CancelServiceBookingResource;
@@ -40,7 +42,7 @@ import jakarta.validation.Valid;
  * REST Controller for service booking operations.
  */
 @RestController
-@RequestMapping("/api/service-bookings")
+@RequestMapping("/api/v1/service-bookings")
 public class ServiceBookingController {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceBookingController.class);
@@ -89,6 +91,92 @@ public class ServiceBookingController {
             LOGGER.error("Error getting service bookings", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body("An error occurred while getting service bookings");
+        }
+    }
+    
+    /**
+     * Get the current/next upcoming service booking for the authenticated user.
+     * Returns 200 OK with the booking if found, or 204 No Content if no upcoming booking exists.
+     * 
+     * @return ServiceBookingResource or 204 No Content
+     */
+    @GetMapping("/current")
+    public ResponseEntity<?> getCurrentBooking() {
+        try {
+            Long userId = getCurrentUserId();
+            var query = GetUserUpcomingBookingQuery.fromNow(userId);
+            var booking = queryService.handle(query);
+            
+            if (booking.isEmpty()) {
+                // 204 No Content - User has no upcoming appointments
+                return ResponseEntity.noContent().build();
+            }
+            
+            var resource = ServiceBookingResourceFromEntityAssembler.toResourceFromEntity(booking.get());
+            return ResponseEntity.ok(resource);
+        } catch (SecurityException e) {
+            LOGGER.warn("Unauthorized access attempt to get current booking: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body("No autorizado: debe iniciar sesión para ver su cita actual");
+        } catch (Exception e) {
+            LOGGER.error("Error getting current booking", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error interno del servidor al obtener la cita actual");
+        }
+    }
+    
+    /**
+     * Get service bookings schedule for the authenticated user within a month.
+     * Returns all bookings for the specified month and year.
+     * 
+     * @param month Month number (1-12)
+     * @param year Year (e.g., 2025)
+     * @return List of ServiceBookingResource (empty list if no bookings)
+     */
+    @GetMapping("/schedule")
+    public ResponseEntity<?> getSchedule(
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year) {
+        try {
+            Long userId = getCurrentUserId();
+            
+            // Default to current month/year if not provided
+            java.time.LocalDate now = java.time.LocalDate.now();
+            int queryMonth = month != null ? month : now.getMonthValue();
+            int queryYear = year != null ? year : now.getYear();
+            
+            // Validate month range
+            if (queryMonth < 1 || queryMonth > 12) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("El mes debe estar entre 1 y 12");
+            }
+            
+            // Validate year range (reasonable bounds)
+            if (queryYear < 2020 || queryYear > 2100) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("El año debe estar entre 2020 y 2100");
+            }
+            
+            var query = GetUserScheduleQuery.forMonth(userId, queryMonth, queryYear);
+            var bookings = queryService.handle(query);
+            
+            var resources = bookings.stream()
+                .map(ServiceBookingResourceFromEntityAssembler::toResourceFromEntity)
+                .collect(Collectors.toList());
+            
+            // Always return 200 OK with array (can be empty)
+            return ResponseEntity.ok(resources);
+        } catch (SecurityException e) {
+            LOGGER.warn("Unauthorized access attempt to get schedule: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body("No autorizado: debe iniciar sesión para ver su calendario");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body("Parámetros inválidos: " + e.getMessage());
+        } catch (Exception e) {
+            LOGGER.error("Error getting schedule", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error interno del servidor al obtener el calendario");
         }
     }
     

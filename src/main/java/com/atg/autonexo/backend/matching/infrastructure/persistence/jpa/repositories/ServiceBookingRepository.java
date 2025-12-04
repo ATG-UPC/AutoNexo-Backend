@@ -63,5 +63,30 @@ public interface ServiceBookingRepository extends JpaRepository<ServiceBooking, 
         @Param("fromDate") LocalDateTime fromDate,
         @Param("status") ServiceBookingStatus status
     );
+    
+    /**
+     * Find upcoming service bookings for a user with specific statuses, ordered by scheduled date.
+     * Used to get the next upcoming appointment for the car owner.
+     */
+    @Query("SELECT sb FROM ServiceBooking sb WHERE sb.userId.id = :userId " +
+           "AND sb.status IN :statuses AND sb.scheduledDate >= :fromDate " +
+           "ORDER BY sb.scheduledDate ASC")
+    List<ServiceBooking> findUpcomingByUserIdAndStatuses(
+        @Param("userId") Long userId,
+        @Param("statuses") List<ServiceBookingStatus> statuses,
+        @Param("fromDate") LocalDateTime fromDate
+    );
+    
+    /**
+     * Find service bookings for a user within a date range (for schedule/calendar view).
+     */
+    @Query("SELECT sb FROM ServiceBooking sb WHERE sb.userId.id = :userId " +
+           "AND sb.scheduledDate >= :fromDate AND sb.scheduledDate <= :toDate " +
+           "ORDER BY sb.scheduledDate ASC")
+    List<ServiceBooking> findByUserIdAndScheduledDateBetween(
+        @Param("userId") Long userId,
+        @Param("fromDate") LocalDateTime fromDate,
+        @Param("toDate") LocalDateTime toDate
+    );
 }
 
