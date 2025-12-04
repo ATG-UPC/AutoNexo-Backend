@@ -4,6 +4,10 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -13,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.atg.autonexo.backend.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
@@ -26,6 +31,7 @@ import com.atg.autonexo.backend.vehicle.domain.model.queries.GetMaintenanceByIdQ
 import com.atg.autonexo.backend.vehicle.domain.model.queries.GetPendingMaintenancesQuery;
 import com.atg.autonexo.backend.vehicle.domain.model.queries.GetVehicleMaintenanceHistoryQuery;
 import com.atg.autonexo.backend.vehicle.interfaces.rest.resources.CreateMaintenanceResource;
+import com.atg.autonexo.backend.vehicle.interfaces.rest.resources.MaintenanceResource;
 import com.atg.autonexo.backend.vehicle.interfaces.rest.transform.VehicleCommandFromResourceAssembler;
 import com.atg.autonexo.backend.vehicle.interfaces.rest.transform.VehicleResourceFromEntityAssembler;
 
@@ -71,15 +77,78 @@ public class MaintenanceController {
     }
     
     @GetMapping("/vehicles/{vehicleId}/maintenances")
-    public ResponseEntity<?> getMaintenanceHistory(@PathVariable Long vehicleId) {
+    public ResponseEntity<?> getMaintenanceHistory(
+            @PathVariable Long vehicleId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sort) {
         try {
             Long userId = getCurrentUserId();
             var query = new GetVehicleMaintenanceHistoryQuery(vehicleId, userId);
             var maintenances = maintenanceQueryService.handle(query);
-            var resources = maintenances.stream()
+            
+            // Convert to resources
+            var allResources = maintenances.stream()
                 .map(VehicleResourceFromEntityAssembler::toResourceFromEntity)
                 .collect(Collectors.toList());
-            return ResponseEntity.ok(resources);
+            
+            // Apply sorting if specified (format: "field,direction" e.g., "maintenanceDate,desc")
+            if (sort != null && !sort.isEmpty()) {
+                String[] sortParams = sort.split(",");
+                if (sortParams.length == 2) {
+                    String field = sortParams[0].trim();
+                    String direction = sortParams[1].trim().toLowerCase();
+                    boolean ascending = !direction.equals("desc");
+                    
+                    allResources.sort((a, b) -> {
+                        int comparison = 0;
+                        switch (field) {
+                            case "maintenanceDate":
+                                comparison = a.maintenanceDate().compareTo(b.maintenanceDate());
+                                break;
+                            case "mileage":
+                                comparison = a.mileage().compareTo(b.mileage());
+                                break;
+                            case "totalCost":
+                                comparison = a.totalCost().compareTo(b.totalCost());
+                                break;
+                            default:
+                                // Default sort by maintenanceDate descending
+                                comparison = b.maintenanceDate().compareTo(a.maintenanceDate());
+                                break;
+                        }
+                        return ascending ? comparison : -comparison;
+                    });
+                }
+            } else {
+                // Default sort: maintenanceDate descending
+                allResources.sort((a, b) -> b.maintenanceDate().compareTo(a.maintenanceDate()));
+            }
+            
+            // Apply pagination
+            int start = page * size;
+            int end = Math.min(start + size, allResources.size());
+            
+            if (start >= allResources.size()) {
+                // Return empty page if start is beyond list size
+                Pageable pageable = PageRequest.of(page, size);
+                Page<MaintenanceResource> emptyPage = new PageImpl<>(
+                    java.util.Collections.emptyList(),
+                    pageable,
+                    0
+                );
+                return ResponseEntity.ok(emptyPage);
+            }
+            
+            var pagedResources = allResources.subList(start, end);
+            Pageable pageable = PageRequest.of(page, size);
+            Page<MaintenanceResource> pageResult = new PageImpl<>(
+                pagedResources,
+                pageable,
+                allResources.size()
+            );
+            
+            return ResponseEntity.ok(pageResult);
         } catch (UnauthorizedVehicleAccessException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
